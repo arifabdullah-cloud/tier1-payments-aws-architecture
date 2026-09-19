@@ -260,3 +260,272 @@ The architecture does not prescribe a specific enterprise source-control or CI/C
 Production releases should support progressive deployment and controlled rollback where technically feasible. Application rollback must be distinguished from database and transactional-state recovery, because a software version can often be reverted more easily than committed financial data.
 
 The resulting delivery model combines centralized platform guardrails with decentralized application ownership: the central platform team defines the governed AWS foundation, while product teams build, deploy, observe, and operate their applications within those boundaries.
+
+## 3. Application Platform Decision
+
+### 3.1 Decision Context
+
+The payment platform contains a mixture of long-running APIs and services, asynchronous processing, integration components, and potentially legacy workloads that may not share the same compute requirements.
+
+The application platform therefore does not force all workloads onto a single compute model. Amazon ECS, Amazon EKS, AWS Lambda, and Amazon EC2 are evaluated according to workload characteristics, operational complexity, resilience, security, deployment control, cost transparency, and portability.
+
+The default platform should minimize unnecessary operational complexity while preserving sufficient flexibility for exceptional workload requirements.
+
+### 3.2 Compute Platform Comparison
+
+| Option | Strengths | Trade-offs | Position in Target Architecture |
+|---|---|---|---|
+| Amazon ECS with AWS Fargate | AWS-native container orchestration; no Kubernetes control plane or worker-node management required with Fargate; supports service scaling and Multi-AZ placement; integrates with AWS identity, networking, load balancing, logging, and deployment capabilities. | AWS-specific orchestration model; Fargate provides less host-level control than EC2-backed containers; portability still depends on application design and external service dependencies. | **Default for long-running containerized payment services.** |
+| Amazon EKS | Managed Kubernetes control plane; Kubernetes APIs and ecosystem; appropriate where Kubernetes standards, tooling, operators, or existing Kubernetes workloads are required. | Greater platform and operational complexity; requires Kubernetes-specific skills, security controls, lifecycle management, and governance. Kubernetes does not by itself remove dependencies on AWS-native data, identity, messaging, networking, or security services. | **Not the default.** Reconsider where a demonstrated Kubernetes requirement exists. |
+| AWS Lambda | Event-driven execution model with infrastructure scaling managed by AWS; suitable for short-lived event handlers, automation, and selected asynchronous processing. | Different execution and operational model from continuously running services; runtime and execution constraints must be considered; unsuitable for workloads requiring persistent processes or host-level control. | **Selective use for suitable event-driven workloads.** |
+| Amazon EC2 | Maximum operating-system and host-level control; broad compatibility with existing software and specialized runtime requirements. | Highest infrastructure-management responsibility among the evaluated options, including instance lifecycle, operating-system maintenance, capacity, and associated controls. | **Exception path for legacy or specialized workloads requiring VM/host control.** |
+
+### 3.3 Default Runtime: Amazon ECS with AWS Fargate
+
+Amazon ECS with AWS Fargate is selected as the default runtime for long-running containerized payment services.
+
+Representative workloads include payment initiation APIs, payment validation services, payment processing services, and status or enquiry APIs where those components can be packaged as containers and do not require host-level control.
+
+The decision is based primarily on operational simplicity rather than an assumption that ECS provides inherently better application functionality than Kubernetes.
+
+Fargate removes the requirement for product teams to provision and maintain the underlying container host fleet. ECS provides the orchestration layer while the application team retains responsibility for container images, application configuration, IAM permissions, network access, telemetry, scaling configuration, deployment behaviour, and application security.
+
+Critical services will run with multiple tasks distributed across Availability Zones so that the failure of a single task or Availability Zone does not inherently remove the service. Load balancing, health checks, scaling policies, deployment configuration, and dependency resilience must be designed consistently with the end-to-end availability objective.
+
+The 99.99% availability target is not attributed to ECS or Fargate alone. It remains an end-to-end service objective dependent on application design, data services, network paths, integrations, operational controls, and downstream dependencies.
+
+### 3.4 Selective Use of AWS Lambda
+
+AWS Lambda may be used where an event-driven execution model provides a clear fit.
+
+Candidate use cases include short-lived event processing, selected asynchronous integration, operational automation, and processing that does not require a continuously running service.
+
+Lambda is not selected as the universal payment runtime. Critical transaction processing should not be decomposed into functions solely to adopt a serverless model. Function boundaries must follow application and transaction requirements rather than the capabilities of the compute service.
+
+Where Lambda participates in payment-related processing, retry behaviour, duplicate delivery, idempotency, concurrency, failure handling, observability, and downstream service limits must be explicitly considered.
+
+### 3.5 EC2 Exception Path
+
+Amazon EC2 remains available for workloads that cannot initially meet the container platform requirements or that require operating-system, runtime, networking, or host-level capabilities unavailable through the preferred managed compute model.
+
+This is particularly relevant during progressive migration, where an existing application component may need to move before it can be materially refactored.
+
+EC2 usage is therefore treated as a justified exception rather than the default modernization target. Exceptions should document the technical requirement, operational implications, security controls, modernization dependency, and review trigger.
+
+This approach prevents the target architecture from requiring unnecessary application rewrites as a prerequisite for migration while avoiding indefinite expansion of unmanaged legacy patterns.
+
+### 3.6 Why Amazon EKS Is Not the Default
+
+Amazon EKS was considered because Kubernetes provides a standardized orchestration API, a broad ecosystem, and potential alignment with organizations that have established Kubernetes platforms and skills.
+
+The assessment, however, does not identify an existing Kubernetes standard, Kubernetes-specific workload requirement, or organizational dependency on the Kubernetes ecosystem.
+
+Selecting EKS solely to claim application portability would therefore introduce additional platform concepts and operational responsibilities without a demonstrated requirement.
+
+Kubernetes can improve portability of orchestration definitions and platform practices, but it does not automatically make the application cloud-independent. Applications may remain coupled through identity, databases, messaging, networking, security services, observability, and other external dependencies.
+
+EKS should be reconsidered if:
+
+- Kubernetes becomes an enterprise platform standard;
+- significant existing workloads already depend on Kubernetes APIs or operators;
+- required tooling depends on the Kubernetes ecosystem;
+- platform-team capability makes Kubernetes operational overhead acceptable; or
+- future workload requirements demonstrate benefits that outweigh the additional complexity.
+
+The decision is therefore not that EKS is unsuitable for Tier 1 banking workloads, but that its additional capabilities are not currently justified by the stated requirements.
+
+### 3.7 Portability Strategy
+
+Application portability is addressed independently from the selection of ECS as the default runtime.
+
+Containerized services should use OCI-compatible container images and avoid relying on persistent local container state. Runtime configuration should be externalized from the application image, and secrets should be injected through controlled mechanisms rather than embedded in source code or images.
+
+Service interfaces should use documented contracts such as versioned APIs and event schemas. Integration behaviour, including retries, timeouts, idempotency, and failure handling, should be explicit rather than dependent on undocumented platform behaviour.
+
+Infrastructure and deployment configuration should be maintained as version-controlled automation. AWS-specific dependencies are permitted where they provide justified security, reliability, operational, or cost benefits, but those dependencies should be explicit rather than hidden throughout application logic.
+
+Portability therefore means maintaining practical migration boundaries and avoiding unnecessary compute-platform coupling. It does not imply that migration to another cloud or runtime would be cost-free.
+
+### 3.8 Decision Summary
+
+The target application platform uses a workload-appropriate compute strategy rather than a single mandatory runtime:
+
+- **Amazon ECS with AWS Fargate** is the default for long-running containerized payment APIs and services.
+- **AWS Lambda** is used selectively for suitable short-lived and event-driven workloads.
+- **Amazon EC2** supports justified legacy or specialized requirements where host-level control is necessary.
+- **Amazon EKS** is retained as an alternative where a demonstrated Kubernetes requirement justifies its additional operational complexity.
+
+This decision will be reviewed if application discovery identifies incompatible runtime requirements, enterprise platform standards change, Kubernetes-specific dependencies emerge, or measured cost, performance, security, or operational characteristics materially alter the trade-off.
+
+## 4. Data and Disaster Recovery
+
+### 4.1 Data Architecture Decision
+
+Amazon Aurora PostgreSQL is selected as the default authoritative transactional data store for committed payment state, subject to validation during application and data discovery.
+
+The selection is based on the expected need for relational transaction semantics, ACID transactions, consistency, durable payment state, and controlled relationships between payment records. The assessment does not provide the existing database technology, schema, transaction volume, or access patterns; therefore, the selection must be validated against measured workload and application requirements before implementation.
+
+Amazon DynamoDB remains appropriate for workloads whose access patterns and scale characteristics favor a key-value or document model, but it is not selected as the default system of record solely for scalability.
+
+The architecture separates authoritative transactional state from derived data, events, reporting data, caches, and other secondary representations. A downstream event or reporting record must not become the authoritative source of payment status.
+
+### 4.2 Transaction Integrity
+
+Payment correctness takes precedence over maximizing availability during ambiguous failure conditions.
+
+Each payment is assigned a durable identifier that can be used to identify retries and prevent unintended duplicate financial processing. Application operations that may be retried must implement appropriate idempotency controls.
+
+Where a committed database transaction must result in downstream event publication, the architecture uses a transactional outbox pattern.
+
+The payment-state change and corresponding outbox record are written within the same local database transaction:
+
+    BEGIN TRANSACTION
+
+      Update authoritative payment state
+
+      Write corresponding outbox record
+
+    COMMIT
+
+An independent publisher subsequently reads committed outbox records and publishes the required events to the messaging layer.
+
+This avoids relying on a distributed transaction between the relational database and messaging platform and reduces the risk of a committed payment being permanently separated from its corresponding event.
+
+The pattern does not imply exactly-once end-to-end delivery. An event may be delivered more than once during retry or failure scenarios. Consumers must therefore implement idempotent processing using stable payment and/or event identifiers.
+
+Transaction state transitions must also be explicitly defined so that recovery processes can distinguish completed, rejected, pending, retryable, and ambiguous transactions.
+
+### 4.3 High Availability Within the Primary Region
+
+The authoritative Aurora database is deployed using a Multi-AZ architecture within the approved primary AWS Region.
+
+Critical application services are similarly distributed across multiple Availability Zones. Application instances are treated as replaceable compute capacity and do not retain authoritative payment state locally.
+
+This design protects the critical journey against the infrastructure failure scenarios covered by the selected Multi-AZ services without requiring regional disaster recovery for routine instance or Availability Zone failures.
+
+Application health checks, database connectivity, dependency behaviour, retry policies, timeouts, and failover behaviour must be tested under failure conditions. Multi-AZ deployment alone does not demonstrate achievement of the 99.99% end-to-end availability target.
+
+### 4.4 Regional Disaster Recovery Strategy
+
+A secondary approved AWS Region provides disaster recovery capability for a regional failure or other event requiring the primary Region to be abandoned.
+
+Aurora Global Database provides cross-Region replication from the authoritative primary database to a secondary Aurora cluster in the DR Region.
+
+The target model uses a warm-standby approach rather than multi-Region active-active payment processing. Under normal conditions, one Region remains authoritative for payment writes.
+
+The DR Region maintains the infrastructure, connectivity, security configuration, data replication, and minimum application capability required to support recovery within the defined 30-minute RTO. Capacity that does not need to operate at full production scale during normal conditions may be increased as part of the recovery procedure.
+
+The design avoids simultaneous independent payment writes in multiple Regions unless a future architecture explicitly addresses transaction ownership, consistency, conflict handling, and reconciliation.
+
+### 4.5 Regional Failover
+
+Regional failover is a controlled operational procedure rather than an assumption that traffic should automatically move to the secondary Region whenever the primary Region becomes unavailable.
+
+A representative recovery sequence is:
+
+1. Detect and declare the regional incident.
+2. Contain or stop payment writes to the failed primary environment where possible.
+3. Determine the latest replicated transaction position and assess replication health.
+4. Promote the secondary Aurora cluster to become the authoritative database.
+5. Start or scale the DR application services to the required recovery capacity.
+6. Validate identity, network, security, integration, messaging, and on-premises dependencies.
+7. Execute technical and payment-journey validation.
+8. Redirect controlled production traffic to the recovered Region.
+9. Reconcile transactions affected around the failure boundary.
+10. Continue heightened monitoring until transaction state and downstream processing are confirmed stable.
+
+Detailed automation and operational runbooks must be developed and tested before production use.
+
+DNS and traffic-management capabilities may support traffic redirection, but routing alone must not determine whether the secondary payment environment is safe to become authoritative.
+
+### 4.6 RTO and RPO
+
+The architecture targets recovery of critical payment capabilities within the required 30-minute RTO.
+
+Achievement of this target depends on more than database promotion. Recovery testing must include application capacity, network connectivity, identity, secrets and keys, messaging, external dependencies, on-premises integration, traffic redirection, validation, and operational decision time.
+
+The architecture also targets near-zero RPO for committed payment transactions.
+
+Within the primary Region, the selected Multi-AZ database architecture is designed to protect committed data against the infrastructure failures covered by that architecture.
+
+For catastrophic loss of the primary Region, cross-Region Aurora Global Database replication is asynchronous. A residual possibility therefore exists that the most recently committed transactions have not reached the secondary Region at the instant of failure.
+
+The architecture consequently does not claim absolute zero data loss for every regional disaster scenario.
+
+Cross-Region replication lag must be continuously monitored and included in operational recovery decisions. Transactions around the failure boundary must be reconciled against available internal and external evidence.
+
+If the business requirement is subsequently clarified as an absolute RPO of zero even under instantaneous complete loss of the primary Region, the cross-Region data architecture must be revisited rather than representing asynchronous replication as satisfying that stronger requirement.
+
+### 4.7 Transaction Reconciliation
+
+Recovery of infrastructure does not by itself prove recovery of the payment service.
+
+Following a significant failure or regional failover, reconciliation identifies transactions whose final state may be ambiguous.
+
+Reconciliation may compare:
+
+- authoritative payment records;
+- transaction and idempotency identifiers;
+- transactional outbox records;
+- published and consumed events;
+- integration acknowledgements;
+- available records from existing bank systems; and
+- available records from external payment participants or partners.
+
+The exact reconciliation sources depend on the payment rails and existing systems, which are not specified in the assessment.
+
+Transactions identified as inconsistent or ambiguous are handled through controlled operational procedures rather than automatically replayed without verification.
+
+This is intended to prevent recovery activity from creating duplicate payments or incorrectly changing the state of already completed transactions.
+
+### 4.8 Backup and Cyber Recovery
+
+Cross-Region replication is not treated as a backup strategy.
+
+Logical corruption, erroneous application changes, compromised privileged access, or malicious destructive actions may affect both primary and replicated environments.
+
+Independent backups are therefore retained according to approved recovery, retention, encryption, and regulatory requirements.
+
+Backup access and administration must be separated from normal workload administration where practical. Backup protections should reduce the ability of a compromised workload or routine administrator to modify or delete recovery copies.
+
+Recovery procedures must include restoration into an isolated or controlled recovery environment so that data integrity can be validated before restored data is trusted for production use.
+
+Backup restoration is primarily intended for corruption and cyber-recovery scenarios rather than the normal mechanism for meeting the 30-minute regional DR objective.
+
+Backup retention periods, legal hold requirements, geographic placement, and permitted recovery locations require validation against the applicable regulatory and records-management requirements.
+
+### 4.9 DR Testing and Validation
+
+Disaster recovery capability must be demonstrated through recurring tests rather than inferred from architecture diagrams or replication status.
+
+Testing should include:
+
+- application and database failover;
+- loss of an Availability Zone;
+- regional recovery exercises;
+- hybrid connectivity failure;
+- dependency failure;
+- restoration from protected backups;
+- reconciliation of transactions around simulated failure boundaries;
+- validation of monitoring and incident escalation;
+- measurement of actual RTO and observed RPO; and
+- controlled failback to the normal operating model.
+
+Test results must record recovery times, replication behaviour, failed dependencies, manual interventions, reconciliation outcomes, and remediation actions.
+
+Failure scenarios that exceed the required RTO or RPO must result in architecture, automation, capacity, dependency, or operational improvements.
+
+### 4.10 Data and Recovery Decision Summary
+
+The target data and recovery architecture uses:
+
+- **Amazon Aurora PostgreSQL** as the proposed authoritative relational transaction store, subject to workload validation;
+- **Multi-AZ deployment** for high availability within the primary Region;
+- **transactional outbox and idempotency patterns** to preserve consistency between committed payment state and asynchronous processing;
+- **Aurora Global Database** for asynchronous cross-Region replication to an approved DR Region;
+- a **warm-standby regional recovery model** targeting the required 30-minute RTO;
+- **controlled regional failover** rather than unconditional automatic traffic switching;
+- **transaction reconciliation** to resolve ambiguous states around significant failures; and
+- **independent protected backups and tested restoration** for corruption and cyber-recovery scenarios.
+
+The design targets near-zero loss of committed payment transactions while explicitly acknowledging the residual RPO risk introduced by asynchronous cross-Region replication during catastrophic regional failure.
