@@ -529,3 +529,22 @@ The target data and recovery architecture uses:
 - **independent protected backups and tested restoration** for corruption and cyber-recovery scenarios.
 
 The design targets near-zero loss of committed payment transactions while explicitly acknowledging the residual RPO risk introduced by asynchronous cross-Region replication during catastrophic regional failure.
+
+## 5. Security and Threat Control
+
+The target architecture applies defense in depth using preventive,
+detective, and responsive controls across identity, network, application,
+data, software supply chain, and operational boundaries.
+
+The detailed threat model and control mapping is provided in
+[Threat and Control Matrix](03-threat-control-matrix.md).
+
+## 6. Migration Approach
+
+Modernization follows a progressive, wave-based migration strategy,
+beginning with platform foundations and lower-risk workloads before
+transitioning critical payment services and authoritative transactional data.
+
+The detailed migration sequence, dependencies, exit criteria, rollback
+considerations, and migration-debt controls are provided in
+[Migration Roadmap](04-migration-roadmap.md).
