@@ -94,3 +94,169 @@ Audit and configuration evidence will be centrally retained. AWS CloudTrail will
 Material architecture decisions will be documented using Architecture Decision Records (ADRs), including context, decision drivers, alternatives, consequences, risks, and review triggers. Deviations from architecture standards require an explicit exception with an accountable owner, documented rationale, compensating controls where necessary, and a review or expiry condition.
 
 Governance will favor automated controls for deterministic requirements while reserving human architecture review for decisions requiring business, regulatory, security, or technical judgment. This approach is intended to provide strong governance without making the central platform team a deployment bottleneck for product teams.
+
+## 2. Target Architecture
+
+### 2.1 Architecture Overview
+
+The target architecture uses a governed AWS multi-account model with explicit separation between central security, infrastructure, shared services, and banking-entity workloads. Critical payment workloads are designed for Multi-AZ operation within an approved AWS Region, while hybrid connectivity supports coexistence with existing on-premises systems throughout the migration.
+
+The architecture separates four concerns:
+
+- **Governance:** organizational structure, account boundaries, guardrails, and centralized controls.
+- **Connectivity and security:** hybrid connectivity, network segmentation, inspection, and controlled ingress.
+- **Application and data:** payment services, transactional data, APIs, and synchronous/asynchronous integration.
+- **Operations and delivery:** observability, audit, security monitoring, Infrastructure as Code (IaC), and controlled CI/CD.
+
+The logical architecture is shown below.
+
+![Logical Architecture](diagrams/02-logical-architecture.png)
+
+The logical view intentionally leaves the payment compute platform and transactional database implementation open. The compute platform is evaluated in Section 3, while the transactional data and disaster recovery strategy is evaluated in Section 4.
+
+### 2.2 Multi-Account and Entity Isolation
+
+AWS Organizations provides the organizational foundation for the target environment. AWS accounts are used as security, access, billing, and blast-radius boundaries rather than placing all workloads into a single shared account.
+
+The proposed organizational model separates:
+
+- central security tooling and log archival;
+- central network and shared services;
+- production and non-production workloads; and
+- banking entities where separate security, regulatory, administrative, or data boundaries are required.
+
+A conceptual structure is:
+
+    AWS Organization
+    ├── Security OU
+    │   ├── Security Tooling
+    │   └── Log Archive
+    │
+    ├── Infrastructure OU
+    │   ├── Network
+    │   └── Shared Services
+    │
+    └── Workloads OU
+        ├── Entity A
+        │   ├── Production
+        │   └── Non-Production
+        │
+        └── Entity B
+            ├── Production
+            └── Non-Production
+
+The entity names above are illustrative rather than assumptions about the bank's actual legal structure.
+
+Entity isolation is not limited to network segmentation. Depending on approved regulatory and security requirements, isolation may include AWS accounts, VPCs, IAM roles, encryption keys, data stores, deployment permissions, logging boundaries, and cost allocation.
+
+Direct communication between entity workloads is not assumed. Where cross-entity communication is required, it must use an explicitly approved integration path with appropriate authorization, logging, and security controls.
+
+### 2.3 Availability and Failure Domains
+
+Critical payment services are designed to operate across multiple Availability Zones within the selected primary AWS Region.
+
+Application capacity will be distributed so that the loss of a single Availability Zone does not inherently result in loss of the critical payment journey. Selected stateful AWS services must similarly provide an appropriate Multi-AZ resilience model.
+
+Multi-AZ architecture provides high availability against localized infrastructure failures but is not treated as a complete regional disaster recovery strategy. Regional disaster recovery, replication, failover, and recovery limitations are addressed separately in Section 4.
+
+The architecture does not assume that 99.99% availability requires active-active operation across multiple AWS Regions. The availability target applies to defined critical payment journeys and must be validated through end-to-end dependency analysis, failure testing, monitoring, and SLO measurement.
+
+### 2.4 Network and Hybrid Connectivity
+
+Each banking-entity workload is hosted within an appropriately isolated Amazon VPC. Workload resources are distributed across Availability Zones using separate subnets and routing according to their function and security requirements.
+
+Inter-VPC and hybrid connectivity uses a centrally governed transit model based on AWS Transit Gateway rather than independent point-to-point connectivity between every workload network.
+
+The central Network account owns the shared connectivity layer. Transit Gateway routing is used to control connectivity between workload VPCs, shared services, security inspection capabilities, and approved on-premises networks.
+
+Hybrid connectivity is designed around resilient enterprise connectivity. AWS Direct Connect is used as the primary private connectivity mechanism where available and justified, with redundant connectivity and/or AWS Site-to-Site VPN providing additional resilience according to the final network design.
+
+Traffic crossing defined network trust boundaries is routed through appropriate inspection controls. AWS Network Firewall may provide centralized network inspection where required, while Security Groups provide workload-level network access controls.
+
+Entity-to-entity routing is not enabled by default. Connectivity is explicitly introduced only for approved dependencies.
+
+Detailed Direct Connect topology, bandwidth, BGP configuration, carrier diversity, and physical connectivity cannot be finalized without the bank's existing network architecture and connectivity requirements.
+
+### 2.5 Application and Integration Architecture
+
+External and internal consumers access the payment platform through controlled API interfaces.
+
+Amazon Route 53 provides DNS and traffic-routing capabilities, while AWS WAF provides application-layer protection for supported HTTP/S entry points. Amazon API Gateway provides a managed API entry layer for appropriate payment APIs and backend integrations.
+
+The underlying application runtime remains deliberately undecided in this section. Amazon ECS, Amazon EKS, AWS Lambda, and Amazon EC2 are evaluated against representative payment-platform components in Section 3.
+
+Application integration uses both synchronous and asynchronous communication patterns.
+
+Synchronous communication is retained where an immediate response is required as part of the critical transaction path. Asynchronous integration is preferred for activities that do not need to block payment completion, reducing unnecessary runtime coupling between payment processing and secondary consumers.
+
+Amazon EventBridge and Amazon SQS may be used for event routing and durable asynchronous processing where their respective behavior fits the integration requirement.
+
+For example, a committed payment may produce a payment-completed event for downstream notification, reporting, analytics, or other consumers without requiring all of those consumers to be available before the critical transaction can complete.
+
+Events and queues do not replace transaction integrity mechanisms. Reliable coordination between committed transactional state and event publication is addressed as part of the data architecture in Section 4.
+
+Hybrid integration provides controlled connectivity to existing on-premises systems during coexistence and migration. The design does not assume the implementation technology of those existing systems.
+
+### 2.6 Identity, Encryption and Secrets
+
+Workforce access to AWS is federated with the bank's enterprise identity provider through a centrally managed identity model, such as AWS IAM Identity Center, subject to validation against the existing identity architecture.
+
+AWS IAM roles and policies provide workload and administrative authorization according to least-privilege principles. Long-lived application credentials are avoided where AWS workload identities and temporary credentials can be used.
+
+Deployment pipelines use controlled deployment roles scoped to the relevant workload and environment. A deployment identity for one banking entity must not implicitly provide deployment privileges to another entity.
+
+Sensitive application secrets are managed separately from application source code using an approved secrets-management capability such as AWS Secrets Manager.
+
+AWS Key Management Service (AWS KMS) provides managed encryption-key capabilities for supported workloads and data services. Key ownership and separation will follow the required entity, regulatory, and data-classification boundaries.
+
+Data is encrypted in transit and at rest using controls appropriate to the selected services and regulatory requirements.
+
+### 2.7 Observability, Audit and Security Monitoring
+
+Observability is designed around the critical payment journey rather than infrastructure health alone.
+
+Application and platform telemetry includes:
+
+- metrics;
+- structured logs;
+- distributed traces where appropriate;
+- alarms and operational events; and
+- business/service indicators required to measure defined SLOs.
+
+Amazon CloudWatch provides native AWS monitoring, logging, and alerting capabilities. Application telemetry should support correlation across distributed components without unnecessarily recording sensitive payment or authentication data.
+
+AWS CloudTrail provides audit evidence of relevant AWS API and account activity. AWS Config can provide resource configuration history and compliance evaluation for supported resources.
+
+Security findings are centrally visible to the security function. Services such as Amazon GuardDuty, Amazon Inspector, AWS Config, and AWS Security Hub may contribute to organization-wide detection and security posture management according to the final security control design.
+
+Long-term audit and security logs are separated from workload administration through centralized security and log-archive capabilities. Log centralization must itself respect applicable data residency and sensitive-data requirements.
+
+Product teams remain responsible for application telemetry and SLOs, while central platform and security teams provide organization-wide logging, security monitoring, governance, and shared operational capabilities.
+
+### 2.8 Deployment and Delivery
+
+Application and infrastructure changes are delivered through controlled CI/CD pipelines rather than routine manual production changes.
+
+The delivery flow follows the pattern:
+
+    Source Control
+         ↓
+    Build and Test
+         ↓
+    Security / Dependency Checks
+         ↓
+    Approved Artifact
+         ↓
+    Controlled Deployment
+         ↓
+    Workload Environment
+
+For containerized components, Amazon Elastic Container Registry (ECR) provides a managed container-image registry. Container images are scanned according to the required vulnerability-management policy before promotion to production.
+
+Infrastructure changes are managed through approved Infrastructure as Code where practical, enabling version control, peer review, repeatability, validation, and traceability.
+
+The architecture does not prescribe a specific enterprise source-control or CI/CD product because the bank's existing development toolchain is not provided. Existing enterprise tooling may be retained where it satisfies the required identity, security, approval, audit, and deployment controls.
+
+Production releases should support progressive deployment and controlled rollback where technically feasible. Application rollback must be distinguished from database and transactional-state recovery, because a software version can often be reverted more easily than committed financial data.
+
+The resulting delivery model combines centralized platform guardrails with decentralized application ownership: the central platform team defines the governed AWS foundation, while product teams build, deploy, observe, and operate their applications within those boundaries.
