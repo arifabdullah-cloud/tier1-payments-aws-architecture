@@ -270,7 +270,7 @@ The specific migration technology cannot be selected until the existing database
 
 **Dependencies**
 
-Validated Aurora PostgreSQL target architecture, source database assessment, data-migration tooling, reconciliation rules, DR capability, and business cutover approval.
+Validated target transactional data architecture, including confirmation of Aurora PostgreSQL suitability, source database assessment, data-migration tooling, reconciliation rules, DR capability, and business cutover approval.
 
 **Exit criteria**
 

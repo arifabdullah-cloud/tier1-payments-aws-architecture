@@ -264,6 +264,14 @@ https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/BackupRestoreAurora
 
 Used to support the separation of database replication from backup and recovery controls.
 
+### AWS Backup
+
+AWS, *What Is AWS Backup?*
+
+https://docs.aws.amazon.com/aws-backup/latest/devguide/whatisbackup.html
+
+Used to support centralized backup policy and recovery-management considerations in the proposed backup and cyber-recovery architecture.
+
 ---
 
 ## 8. Threat and Control Mapping

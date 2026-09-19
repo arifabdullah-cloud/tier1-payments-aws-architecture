@@ -112,7 +112,7 @@ Aurora Multi-AZ provides resilience within the primary Region, while cross-Regio
 
 Asynchronous replication introduces a residual window in which the most recent committed transactions may not yet exist in the secondary Region when catastrophic regional failure occurs.
 
-The architecture therefore does not claim absolute zero RPO across all regional-failure scenarios.
+The architecture therefore does not claim zero data loss across all regional-failure scenarios.
 
 Validation must include:
 

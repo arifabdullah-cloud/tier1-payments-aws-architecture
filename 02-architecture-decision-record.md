@@ -53,13 +53,13 @@ The objective is not to select the platform with the largest feature set. The pr
 
 ## 3. Decision
 
-Amazon ECS with AWS Fargate is selected as the default runtime for long-running containerized payment services.
+Amazon ECS with AWS Fargate is proposed as the default runtime for long-running containerized payment services.
 
 Amazon ECS provides AWS-native container orchestration, while AWS Fargate provides managed compute capacity without requiring the product or platform team to maintain an EC2 worker fleet for the default runtime.
 
 Critical ECS services will run multiple tasks across Availability Zones according to workload requirements. Application health checks, scaling, load balancing, deployment configuration, dependency resilience, and observability remain part of the application and platform design.
 
-The selection of ECS/Fargate does not imply that all payment-platform workloads must use ECS.
+The proposed use of ECS/Fargate does not imply that all payment-platform workloads must use ECS.
 
 AWS Lambda may be used for suitable short-lived or event-driven workloads. Amazon EC2 remains available where legacy or specialized workloads require host-level control. Amazon EKS may be adopted where a demonstrated Kubernetes requirement justifies its additional platform complexity.
 
@@ -194,7 +194,7 @@ A review trigger does not automatically require migration away from ECS. It requ
 
 ## 11. Decision Outcome
 
-Amazon ECS with AWS Fargate is adopted as the default runtime for long-running containerized payment services because it satisfies the currently stated workload requirements without introducing Kubernetes-specific operational complexity that has not been justified.
+Amazon ECS with AWS Fargate is proposed as the default runtime for long-running containerized payment services because it satisfies the currently stated workload requirements without introducing Kubernetes-specific operational complexity that has not been justified.
 
 The architecture retains AWS Lambda, Amazon EC2, and Amazon EKS as workload-specific alternatives rather than treating the default platform as an absolute constraint.
 

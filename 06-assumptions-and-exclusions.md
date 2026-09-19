@@ -38,7 +38,7 @@ Exact compute sizing, scaling thresholds, database sizing, network capacity, and
 
 The current database engine, schema, data volume, transaction model, access patterns, replication capability, and migration constraints have not been provided.
 
-Amazon Aurora PostgreSQL is proposed as the target relational transaction store based on the stated payment integrity, availability, and recovery requirements, subject to validation against the existing data model and workload characteristics.
+Amazon Aurora PostgreSQL is proposed as the authoritative relational transaction store based on the stated payment integrity, availability, and recovery requirements, subject to validation against the existing data model, transaction semantics, access patterns, and workload characteristics.
 
 ### A06 — Enterprise Identity
 

@@ -10,7 +10,7 @@ The architecture is designed around the required 99.99% availability target for 
 
 The design treats transaction integrity, security, regulatory boundaries, and recoverability as primary architecture concerns. AWS managed services will be used where their operational and resilience benefits justify the dependency, while application portability will be addressed through application architecture, interfaces, data and event contracts, portable packaging, and deployment automation rather than relying on a single compute platform.
 
----
+----
 
 ## 1. Architecture Framing
 
@@ -95,6 +95,12 @@ Material architecture decisions will be documented using Architecture Decision R
 
 Governance will favor automated controls for deterministic requirements while reserving human architecture review for decisions requiring business, regulatory, security, or technical judgment. This approach is intended to provide strong governance without making the central platform team a deployment bottleneck for product teams.
 
+### 1.6 System Context
+
+![Payment Platform Context Diagram](diagrams/01-context-diagram.png)
+
+*Figure 1 — Tier 1 payment platform system context.*
+----
 ## 2. Target Architecture
 
 ### 2.1 Architecture Overview
@@ -108,11 +114,7 @@ The architecture separates four concerns:
 - **Application and data:** payment services, transactional data, APIs, and synchronous/asynchronous integration.
 - **Operations and delivery:** observability, audit, security monitoring, Infrastructure as Code (IaC), and controlled CI/CD.
 
-The logical architecture is shown below.
-
-![Logical Architecture](diagrams/02-logical-architecture.png)
-
-The logical view intentionally leaves the payment compute platform and transactional database implementation open. The compute platform is evaluated in Section 3, while the transactional data and disaster recovery strategy is evaluated in Section 4.
+The logical view remains technology-neutral at the application and transactional-data layers. The implementation choices are evaluated in Section 3 for the application platform and Section 4 for transactional data and disaster recovery.
 
 ### 2.2 Multi-Account and Entity Isolation
 
@@ -183,7 +185,7 @@ External and internal consumers access the payment platform through controlled A
 
 Amazon Route 53 provides DNS and traffic-routing capabilities, while AWS WAF provides application-layer protection for supported HTTP/S entry points. Amazon API Gateway provides a managed API entry layer for appropriate payment APIs and backend integrations.
 
-The underlying application runtime remains deliberately undecided in this section. Amazon ECS, Amazon EKS, AWS Lambda, and Amazon EC2 are evaluated against representative payment-platform components in Section 3.
+The logical architecture remains technology-neutral at the application runtime layer. Amazon ECS, Amazon EKS, AWS Lambda, and Amazon EC2 are evaluated against representative payment-platform components in Section 3.
 
 Application integration uses both synchronous and asynchronous communication patterns.
 
@@ -261,6 +263,19 @@ Production releases should support progressive deployment and controlled rollbac
 
 The resulting delivery model combines centralized platform guardrails with decentralized application ownership: the central platform team defines the governed AWS foundation, while product teams build, deploy, observe, and operate their applications within those boundaries.
 
+### 2.9 Logical Architecture
+
+![Payment Platform Logical Architecture](diagrams/02-logical-architecture.png)
+
+*Figure 2 — Logical architecture and major payment-platform capabilities.*
+
+### 2.10 AWS Deployment Architecture
+
+![Payment Platform Deployment Architecture](diagrams/03-deployment-architecture.png)
+
+*Figure 3 — Target AWS deployment architecture showing account, workload, network and availability boundaries.*
+
+----
 ## 3. Application Platform Decision
 
 ### 3.1 Decision Context
@@ -357,11 +372,12 @@ The target application platform uses a workload-appropriate compute strategy rat
 
 This decision will be reviewed if application discovery identifies incompatible runtime requirements, enterprise platform standards change, Kubernetes-specific dependencies emerge, or measured cost, performance, security, or operational characteristics materially alter the trade-off.
 
+----
 ## 4. Data and Disaster Recovery
 
 ### 4.1 Data Architecture Decision
 
-Amazon Aurora PostgreSQL is selected as the default authoritative transactional data store for committed payment state, subject to validation during application and data discovery.
+Amazon Aurora PostgreSQL is proposed as the authoritative transactional data store for committed payment state, subject to validation during application and data discovery.
 
 The selection is based on the expected need for relational transaction semantics, ACID transactions, consistency, durable payment state, and controlled relationships between payment records. The assessment does not provide the existing database technology, schema, transaction volume, or access patterns; therefore, the selection must be validated against measured workload and application requirements before implementation.
 
@@ -530,21 +546,61 @@ The target data and recovery architecture uses:
 
 The design targets near-zero loss of committed payment transactions while explicitly acknowledging the residual RPO risk introduced by asynchronous cross-Region replication during catastrophic regional failure.
 
+### 4.11 Disaster Recovery Architecture
+
+![Payment Platform Disaster Recovery Architecture](diagrams/04-dr-architecture.png)
+
+*Figure 4 — Multi-AZ availability, cross-Region disaster recovery and protected recovery architecture.*
+
+----
 ## 5. Security and Threat Control
 
-The target architecture applies defense in depth using preventive,
-detective, and responsive controls across identity, network, application,
-data, software supply chain, and operational boundaries.
+The target architecture applies defense in depth across identity, organizational boundaries, network connectivity, applications, data, software delivery, and operations.
 
-The detailed threat model and control mapping is provided in
-[Threat and Control Matrix](03-threat-control-matrix.md).
+Security risks are considered using preventive, detective, and responsive controls. Particular attention is given to privileged-access compromise, software supply-chain compromise, unauthorized deployment, data exfiltration, destructive administrative activity, network intrusion, application/API abuse, payment replay or duplicate processing, audit-evidence protection, and security-control drift.
 
+Security capabilities such as IAM, AWS Organizations guardrails, AWS WAF, AWS Network Firewall, AWS CloudTrail, AWS Config, Amazon GuardDuty, Amazon Inspector, AWS Security Hub, encryption, secrets management, and centralized logging contribute to this control model. These technical controls do not replace defined security ownership, incident response, investigation, escalation, and recovery procedures.
+
+The detailed threat scenarios and associated preventive, detective, and responsive controls are documented in the [Threat and Control Matrix](03-threat-control-matrix.md).
+
+----
 ## 6. Migration Approach
 
-Modernization follows a progressive, wave-based migration strategy,
-beginning with platform foundations and lower-risk workloads before
-transitioning critical payment services and authoritative transactional data.
+Modernization will follow a progressive migration strategy rather than a single high-risk cutover.
 
-The detailed migration sequence, dependencies, exit criteria, rollback
-considerations, and migration-debt controls are provided in
-[Migration Roadmap](04-migration-roadmap.md).
+The proposed sequence establishes cloud governance, security, connectivity, and observability before migrating production payment capabilities. Lower-risk workloads are used to validate the platform and operating model before progressively transitioning critical payment services and authoritative transactional data.
+
+Hybrid coexistence remains an explicit architecture requirement during migration. For each capability and data domain, authoritative ownership must remain clear while legacy and target environments operate concurrently.
+
+Each migration wave requires measurable exit criteria covering relevant functional, security, performance, resilience, operational, and transaction-integrity requirements.
+
+Application rollback, traffic rollback, data rollback, and correction of committed financial transactions are treated as separate concerns. A technical rollback must not create inconsistent or duplicate financial state.
+
+The detailed migration waves, dependencies, exit criteria, rollback considerations, and migration-debt controls are documented in the [Migration Roadmap](04-migration-roadmap.md).
+
+----
+## 7. Architecture Decision and Review
+
+The selection of Amazon ECS with AWS Fargate as the default runtime for suitable long-running containerized payment services is recorded as a formal Architecture Decision Record.
+
+The decision evaluates Amazon EKS, Amazon EC2, and AWS Lambda as alternatives and documents the decision drivers, consequences, risks, and conditions under which the decision should be reconsidered.
+
+The decision does not establish ECS/Fargate as a mandatory runtime for every workload. Alternative compute models remain available where workload characteristics provide a justified requirement.
+
+The detailed decision and review triggers are documented in [ADR-001 — Default Container Platform for Payment Services](02-architecture-decision-record.md).
+
+----
+## 8. Architecture Risks, Assumptions and Validation
+
+The target architecture contains assumptions and residual risks that require validation before production implementation.
+
+Material areas requiring further evidence include application dependencies, workload characteristics, existing database technology, country-specific regulatory requirements, external dependency behaviour, production capacity, security integration, migration constraints, and recovery performance.
+
+In particular, the architecture does not claim guaranteed zero data loss during every catastrophic regional failure scenario. Cross-Region disaster recovery must be validated against the business interpretation of near-zero RPO, including replication behaviour and transaction reconciliation.
+
+Supporting material is maintained in:
+
+- [Risk Register](05-risk-register.md)
+- [Assumptions and Exclusions](06-assumptions-and-exclusions.md)
+- [Validation and Limitations](07-validation-and-limitations.md)
+- [References](08-references.md)
