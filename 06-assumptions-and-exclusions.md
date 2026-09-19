@@ -1,80 +1,145 @@
 # Assumptions and Exclusions
 
-## Purpose
+## 1. Purpose
 
-The assessment scenario intentionally leaves several implementation and organizational details unspecified. The following assumptions are used to establish clear architecture boundaries without inventing organization-specific requirements.
+The assessment provides architectural requirements but does not include all information required for production implementation.
 
-These assumptions should be validated during architecture discovery before production implementation.
+The following assumptions enable the proposed architecture to be developed without presenting unknown information as fact. They must be validated during discovery and detailed design.
 
-## Assumptions
+---
 
-### A01 — Countries and Regulatory Requirements
+## 2. Assumptions
 
-The exact countries, legal entities, and applicable regulatory requirements are not specified.
+### A01 — Regulatory Jurisdictions
 
-The architecture therefore assumes that approved AWS Regions and data residency requirements will be determined for each banking entity before production deployment.
+The specific countries, banking entities, and regulatory frameworks applicable to the platform have not been provided.
 
-The architecture must support isolation of workloads and regulated data according to those approved boundaries.
+The architecture therefore assumes that approved AWS Regions, data-residency requirements, encryption requirements, logging requirements, and cross-border data restrictions will be validated separately for each banking entity before deployment.
 
-### A02 — Existing On-Premises Environment
+### A02 — Hybrid Coexistence
 
-Existing on-premises systems remain operational during the modernization programme.
+The existing on-premises payment platform and dependent systems will remain operational during at least part of the migration.
 
-The target architecture must therefore support hybrid connectivity and coexistence between on-premises and AWS-hosted workloads throughout the migration.
+The target architecture therefore supports hybrid connectivity and progressive coexistence rather than assuming an immediate full migration to AWS.
 
 ### A03 — Existing Application Architecture
 
-The current payment platform implementation, programming languages, runtime dependencies, and application topology are not specified.
+Detailed application source code, runtime dependencies, operating-system requirements, service boundaries, and container suitability have not been provided.
 
-The architecture will therefore avoid assuming that all existing components can immediately be containerized or converted to serverless workloads.
+ECS with Fargate is therefore the proposed default for suitable long-running containerized services, while EC2, Lambda, or EKS remain available where workload characteristics justify an alternative.
 
-### A04 — Transaction Volume and Performance
+### A04 — Workload Characteristics
 
-Peak transaction volumes, transaction sizes, latency requirements, and growth forecasts are not provided.
+Transaction volumes, request rates, concurrency, latency distribution, growth projections, payload sizes, batch workloads, and peak-period characteristics have not been provided.
 
-The proposed architecture will define scalable patterns, but final capacity, performance, and cost sizing require workload measurements and performance testing.
+Exact compute sizing, scaling thresholds, database sizing, network capacity, and cost estimates therefore require representative measurements and performance testing.
 
 ### A05 — Existing Data Platform
 
-The existing database technology, schema, data volume, and replication capabilities are not specified.
+The current database engine, schema, data volume, transaction model, access patterns, replication capability, and migration constraints have not been provided.
 
-Database technology will therefore be selected based on required transaction semantics, availability, recovery, residency, and operational requirements rather than assumed compatibility with the existing platform.
+Amazon Aurora PostgreSQL is proposed as the target relational transaction store based on the stated payment integrity, availability, and recovery requirements, subject to validation against the existing data model and workload characteristics.
 
-### A06 — Identity Provider
+### A06 — Enterprise Identity
 
-The bank is assumed to have an existing enterprise identity provider capable of federation with AWS.
+An enterprise identity provider capable of federation with AWS is assumed to exist.
 
-The architecture should reuse centralized enterprise identities rather than create independent long-lived administrator identities for normal operations.
+Routine workforce access should use federated identities, MFA, role-based authorization, and temporary AWS credentials rather than persistent individual administrative credentials.
 
-### A07 — Platform Ownership
+### A07 — Operating Model
 
-As stated in the assessment, the central platform team owns landing zones and organizational guardrails, while product teams own their applications and Service Level Objectives (SLOs).
+The central platform team is assumed to own AWS landing zones, organization-level guardrails, shared platform capabilities, and approved platform patterns.
 
-The architecture will maintain this separation of responsibility.
+Product teams are assumed to own their application services, application-level security, application telemetry, dependencies, and SLOs within those guardrails.
 
 ### A08 — Availability and Recovery Objectives
 
-The following requirements are treated as hard architecture constraints:
+The stated 99.99% critical-journey availability target, 30-minute RTO, and near-zero RPO for committed payment transactions are treated as architecture requirements.
 
-- 99.99% target availability for critical payment journeys
-- 30-minute Recovery Time Objective (RTO)
-- Near-zero Recovery Point Objective (RPO) for committed payment transactions
+"Near-zero RPO" is not interpreted as a guarantee of absolute zero transaction loss across every failure scenario.
 
-Near-zero RPO will not automatically be interpreted as absolute zero data loss across every failure scenario. The credibility and limitations of the recovery design will be explicitly addressed in the Data and Disaster Recovery section.
+### A09 — Single Authoritative Writer Region
 
-## Exclusions
+The proposed DR model assumes one authoritative writer Region for transactional payment data during normal operation.
 
-The following are outside the scope of this assessment unless required to explain an architecture decision:
+The secondary Region is used for disaster recovery rather than concurrent independent multi-Region payment writes.
 
-- Detailed application source-code design
-- Exact infrastructure sizing
-- Detailed cost estimates without workload consumption data
-- Country-specific regulatory interpretation
-- Vendor or commercial contract selection
-- Detailed payment business-process design
-- Production implementation code
-- Detailed operational runbooks
+### A10 — External Dependencies
 
-## Validation Requirement
+External payment networks, other banks, internal banking systems, identity services, and other integration dependencies may have availability or recovery characteristics outside the direct control of this architecture.
 
-All assumptions should be validated with the relevant business, security, risk, infrastructure, application, and regulatory stakeholders before production implementation.
+End-to-end critical-journey availability therefore depends on both the proposed platform and its required dependencies.
+
+### A11 — Migration Authority
+
+The existing platform can remain authoritative while workloads are migrated progressively, and business/technology stakeholders can define controlled cutover windows and migration decision gates.
+
+### A12 — Enterprise Security Operations
+
+The bank is assumed to have security and incident-response functions capable of receiving, investigating, escalating, and responding to security findings generated by the proposed platform controls.
+
+AWS security services alone are not assumed to constitute a complete security operating model.
+
+---
+
+## 3. Exclusions
+
+The following are outside the scope of this architecture assessment unless additional requirements are provided.
+
+### E01 — Detailed Application Design
+
+The assessment does not define source-code implementation, internal class/module structure, detailed API schemas, or payment business logic.
+
+### E02 — Exact Infrastructure Sizing
+
+Exact CPU, memory, task count, database capacity, network bandwidth, and scaling thresholds are excluded until representative workload measurements are available.
+
+### E03 — Detailed Cost Model
+
+A production cost forecast is excluded because transaction volumes, capacity requirements, data growth, network transfer, retention, and workload usage patterns have not been provided.
+
+The architecture nevertheless includes cost transparency and measurement as design requirements.
+
+### E04 — Country-Specific Legal Interpretation
+
+The architecture does not independently determine whether a particular AWS service, Region, replication mechanism, encryption model, or data movement pattern satisfies a country's banking or privacy regulations.
+
+These decisions require validation by the appropriate legal, risk, and compliance functions.
+
+### E05 — Commercial and Vendor Selection
+
+Commercial negotiation, licensing, procurement, contractual terms, and vendor-selection processes are outside scope.
+
+### E06 — Detailed Payment Business Process
+
+Fraud detection, AML controls, sanctions screening, settlement rules, accounting treatment, dispute processing, and payment-scheme-specific business rules are not designed unless required as technical integration dependencies.
+
+### E07 — Production Implementation
+
+Production-ready Terraform or other IaC modules, application deployment manifests, security policies, CI/CD implementation, and operational automation are outside scope.
+
+The assessment defines architecture patterns and required controls rather than production implementation code.
+
+### E08 — Detailed Operational Runbooks
+
+Detailed incident, failover, failback, backup restoration, security-response, and migration runbooks are outside scope.
+
+The architecture identifies required procedures and testing but does not replace implementation-level runbooks.
+
+---
+
+## 4. Assumption Validation
+
+These assumptions must be reviewed with the relevant stakeholders during discovery and detailed design.
+
+Material changes to an assumption may require:
+
+- modification of the target architecture;
+- reassessment of the ECS/Fargate decision;
+- modification of the data architecture;
+- changes to Region or account topology;
+- changes to the DR strategy;
+- changes to the migration sequence; or
+- creation or revision of an Architecture Decision Record.
+
+An assumption should not remain implicit once evidence is available.
