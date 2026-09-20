@@ -100,6 +100,7 @@ Governance will favor automated controls for deterministic requirements while re
 ![Payment Platform Context Diagram](diagrams/01-context-diagram.png)
 
 *Figure 1 — Tier 1 payment platform system context.*
+
 ----
 ## 2. Target Architecture
 
