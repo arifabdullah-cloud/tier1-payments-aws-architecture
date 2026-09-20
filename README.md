@@ -220,3 +220,6 @@ See [`08-references.md`](08-references.md) for the supporting references.
 Generative AI was used as a supporting tool during preparation of this assessment.
 
 See [`09-ai-assistance-disclosure.md`](09-ai-assistance-disclosure.md) for the disclosure.
+
+## Disclaimer
+This repository was created for a technical architecture assessment. The architecture, configurations, and examples are conceptual and based solely on the requirements and assumptions stated in this repository. They do not represent any production environment.
