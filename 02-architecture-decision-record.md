@@ -3,8 +3,11 @@
 ## ADR-001 — Default Container Platform for Payment Services
 
 **Status:** Proposed
+
 **Decision:** Amazon ECS with AWS Fargate as the default container runtime
+
 **Alternatives considered:** Amazon EKS, Amazon EC2, AWS Lambda
+
 **Decision scope:** Long-running containerized payment application services
 
 ---
